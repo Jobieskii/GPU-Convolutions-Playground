@@ -1,0 +1,14 @@
+# screen: [3840, 2160]
+screen: [1920, 1080]
+
+type: val
+kernel:
+ - [1.,  1., 1.]
+ - [1., -9., 1.]
+ - [1.,  1., 1.]
+fun: >
+  if (x >= -6.35 && x <= -1.5)
+    return 1.;
+  else if (x >= 2.5 && x <= 3.5)
+    return 1.;
+  return prev * 0.5;

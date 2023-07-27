@@ -30,11 +30,7 @@ impl ValProgram {
             height,
             convolution_shader: glium::program::ComputeShader::from_source(
                 display,
-                &convolution_shader_src(
-                    "if (x == -7. || x == -6. || x == 3.)
-                                return 1.;
-                            return 0.;",
-                ),
+                &convolution_shader_src(fun)
             )
             .unwrap(),
             swap_shader: glium::program::ComputeShader::from_source(display, &SWAP_SHADER_SRC)
@@ -140,7 +136,7 @@ fn convolution_shader_src(fun_src: &str) -> String {
         i = ivec2(clamp(i.x, 0, int(uWidth)-1), clamp(i.y, 0, int(uHeight)-1));
         return imageLoad(uTexture, i);
     }}
-    float fun(float x) {{
+    float fun(float x, float prev) {{
         {}
     }}
 
@@ -155,7 +151,7 @@ fn convolution_shader_src(fun_src: &str) -> String {
         for (int x = -kernelSize; x <= kernelSize; ++x) 
             sum += csample(i + ivec2(x,y)).r * uKernel[y + kernelSize][x + kernelSize];
         vec4 pixel_sample = csample(i);
-        imageStore(uTexture, i, vec4(pixel_sample.r, fun(sum), pixel_sample.b, pixel_sample.a) );
+        imageStore(uTexture, i, vec4(pixel_sample.r, fun(sum, pixel_sample.r), pixel_sample.b, pixel_sample.a) );
     }}",
         fun_src
     )

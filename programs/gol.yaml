@@ -1,5 +1,5 @@
-# screen: [3840, 2160]
-screen: [1920, 1080]
+screen: [3840, 2160]
+# screen: [1920, 1080]
 
 type: val
 kernel:

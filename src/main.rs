@@ -3,7 +3,7 @@ use std::{time, env, fs};
 use glium::{
     glutin::{
         dpi::{PhysicalPosition, LogicalSize, PhysicalSize},
-        event::{self, ElementState, MouseButton}, platform::unix::WindowBuilderExtUnix,
+        event::{self, ElementState, MouseButton}, platform::unix::WindowBuilderExtUnix, window::Fullscreen,
     },
     program::ComputeShader,
     texture::{MipmapsOption, UncompressedFloatFormat, buffer_texture::{BufferTexture, BufferTextureType}},
@@ -11,7 +11,7 @@ use glium::{
 };
 use yaml_rust::YamlLoader;
 
-use crate::{board::random_board_binary, program::{val_program::ValProgram, Program}};
+use crate::{board::{random_board_binary, empty_board}, program::{val_program::ValProgram, Program}};
 
 mod board;
 mod program;
@@ -179,6 +179,16 @@ fn main() {
                                 .unwrap();
                                 
                             }
+                            46 => {
+                                // c
+                                board = glium::texture::Texture2d::with_format(
+                                    &display,
+                                    empty_board(width, height),
+                                    UncompressedFloatFormat::F32F32F32F32,
+                                    MipmapsOption::NoMipmap,
+                                )
+                                .unwrap();
+                            }
                             33 => {
                                 // f
                                 println!("frametime: {}ms", last_frame_time.as_millis());
@@ -186,6 +196,17 @@ fn main() {
                             1 | 16 => {
                                 // esc | q
                                 *control_flow = glutin::event_loop::ControlFlow::Exit;
+                            }
+                            87 => {
+                                // F11
+                                let gl_window = display.gl_window();
+                                let window = gl_window.window();
+                                if window.fullscreen().is_none() {
+                                    window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                                } else {
+                                    window.set_fullscreen(None);
+                                }
+                                
                             }
                             x if x >= 2 && x <= 11 => { 
                                 // 1..0
