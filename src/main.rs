@@ -2,16 +2,14 @@ use std::{time, env, fs};
 
 use glium::{
     glutin::{
-        dpi::{PhysicalPosition, LogicalSize, PhysicalSize},
-        event::{self, ElementState, MouseButton}, platform::unix::WindowBuilderExtUnix, window::Fullscreen,
+        dpi::PhysicalSize,
+        event::{self, ElementState, MouseButton}, window::Fullscreen,
     },
-    program::ComputeShader,
-    texture::{MipmapsOption, UncompressedFloatFormat, buffer_texture::{BufferTexture, BufferTextureType}},
-    uniform, Rect, Surface, Texture2d, BlitTarget,
+    texture::{MipmapsOption, UncompressedFloatFormat}, Surface, BlitTarget,
 };
 use yaml_rust::YamlLoader;
 
-use crate::{board::{random_board_binary, empty_board}, program::{val_program::ValProgram, Program}};
+use crate::{board::{random_board_binary, empty_board, random_board}, program::{val_program::ValProgram, Program}};
 
 mod board;
 mod program;
@@ -55,7 +53,6 @@ fn main() {
     )
     .unwrap();
 
-    let mut mouse_pos = PhysicalPosition::new(0., 0.);
     let mut mouse_pressed = (false, false);
 
     let mut last_frame_instant = time::Instant::now();
@@ -150,11 +147,10 @@ fn main() {
                     _ => (),
                 },
                 event::WindowEvent::CursorMoved { position, .. } => {
-                    mouse_pos = position;
                     if mouse_pressed.0 {
                         let inner_size = display.gl_window().window().inner_size();
-                        let x: u32 = (mouse_pos.x as u32 * width) / inner_size.width;
-                        let t: u32 = (mouse_pos.y as u32 * height) / inner_size.height;
+                        let x: u32 = (position.x as u32 * width) / inner_size.width;
+                        let t: u32 = (position.y as u32 * height) / inner_size.height;
                         let y: u32 = height
                             - t.min(height);
                         // println!("mp: {} {}, inner_size: {} {}, board_size: {} {}, xy: {} {}", mouse_pos.x, mouse_pos.y, inner_size.width, inner_size.height, width, height, x, y);
@@ -163,7 +159,6 @@ fn main() {
                 }
                 event::WindowEvent::KeyboardInput {
                     input,
-                    is_synthetic,
                     ..
                 } => {
                     if input.state == ElementState::Pressed {
@@ -177,7 +172,16 @@ fn main() {
                                     MipmapsOption::NoMipmap,
                                 )
                                 .unwrap();
-                                
+                            }
+                            45 => {
+                                // x
+                                board = glium::texture::Texture2d::with_format(
+                                    &display,
+                                    random_board(width, height),
+                                    UncompressedFloatFormat::F32F32F32F32,
+                                    MipmapsOption::NoMipmap,
+                                )
+                                .unwrap();
                             }
                             46 => {
                                 // c
