@@ -1,7 +1,7 @@
 use glium::{program::ComputeShader, uniform, Display, Texture2d};
 use yaml_rust::Yaml;
 
-use super::Program;
+use super::{Program, EdgeSolution};
 
 pub struct ValProgram {
     width: u32,
@@ -18,6 +18,8 @@ impl ValProgram {
         fun: &str,
         kernel: &Vec<Vec<f32>>,
         display: &Display,
+        edge_solution: EdgeSolution,
+        edge_val: Option<f32>
     ) -> Self {
         let mut kernel_arr: [[f32; 3]; 3] = [[0.; 3]; 3];
         for (y, row) in kernel.into_iter().enumerate() {
@@ -25,12 +27,17 @@ impl ValProgram {
                 kernel_arr[y][x] = *v;
             }
         }
+        let clamp_src = match edge_solution {
+            EdgeSolution::Clamp => CSAMPLE_CLAMP_SRC.to_string(),
+            EdgeSolution::Wrap => CSAMPLE_WRAP_SRC.to_string(),
+            EdgeSolution::Value => csample_val_src(edge_val.unwrap()),
+        };
         Self {
             width,
             height,
             convolution_shader: glium::program::ComputeShader::from_source(
                 display,
-                &convolution_shader_src(fun)
+                &convolution_shader_src(fun, &clamp_src)
             )
             .unwrap(),
             swap_shader: glium::program::ComputeShader::from_source(display, &SWAP_SHADER_SRC)
@@ -49,8 +56,8 @@ impl Program for ValProgram {
 
         self.convolution_shader.execute(
             uniform! { uWidth: self.width, uHeight: self.height, uKernelSize: 3, uKernel: self.kernel, uTexture: image_unit}, 
-            self.width/16, 
-            self.height/16, 
+            self.width/16 + if self.width % 16 > 0 {1} else {0}, 
+            self.height/16 + if self.height % 16 > 0 {1} else {0}, 
             1
         );
 
@@ -60,8 +67,8 @@ impl Program for ValProgram {
             .set_access(glium::uniforms::ImageUnitAccess::ReadWrite);
         self.swap_shader.execute(
             uniform! { uWidth: self.width, uHeight: self.height, uTexture: image_unit},
-            self.width / 16,
-            self.height / 16,
+            self.width/16 + if self.width % 16 > 0 {1} else {0}, 
+            self.height/16 + if self.height % 16 > 0 {1} else {0}, 
             1,
         );
     }
@@ -71,6 +78,23 @@ impl Program for ValProgram {
     }
 
     fn from_yaml(doc: &Yaml, display: &Display) -> Self {
+        let (edge, val) = {
+            if let Some(edge) = doc["edge"].as_str() {
+                if edge == "wrap" {
+                    (EdgeSolution::Wrap, None)
+                } else if edge == "clamp" {
+                    (EdgeSolution::Clamp, None)
+                } else {
+                    println!("Invalid edge value!");
+                    (EdgeSolution::Clamp, None)
+                }
+            } else if let Some(val) = doc["edge"].as_f64().map(|x| x as f32) {
+                (EdgeSolution::Value, Some(val))
+            } else {
+                println!("Invalid edge value!");
+                (EdgeSolution::Clamp, None)
+            }
+        };
         Self::new(
             doc["screen"][0].as_i64().unwrap().try_into().unwrap(),
             doc["screen"][1].as_i64().unwrap().try_into().unwrap(),
@@ -96,6 +120,8 @@ impl Program for ValProgram {
                 })
                 .collect(),
             display,
+            edge,
+            val
         )
     }
 }
@@ -120,7 +146,7 @@ void main() {
 }
 "#;
 
-fn convolution_shader_src(fun_src: &str) -> String {
+fn convolution_shader_src(fun_src: &str, csample_src: &str) -> String {
     format!(
         "#version 430
 
@@ -133,8 +159,7 @@ fn convolution_shader_src(fun_src: &str) -> String {
     uniform layout(binding=3, rgba32f) image2D uTexture;
 
     vec4 csample(ivec2 i) {{
-        i = ivec2(clamp(i.x, 0, int(uWidth)-1), clamp(i.y, 0, int(uHeight)-1));
-        return imageLoad(uTexture, i);
+        {}
     }}
     float fun(float x, float prev) {{
         {}
@@ -150,9 +175,27 @@ fn convolution_shader_src(fun_src: &str) -> String {
         for (int y = -kernelSize; y <= kernelSize; ++y) 
         for (int x = -kernelSize; x <= kernelSize; ++x) 
             sum += csample(i + ivec2(x,y)).r * uKernel[y + kernelSize][x + kernelSize];
-        vec4 pixel_sample = csample(i);
+
+        vec4 pixel_sample = imageLoad(uTexture, i);
         imageStore(uTexture, i, vec4(pixel_sample.r, fun(sum, pixel_sample.r), pixel_sample.b, pixel_sample.a) );
     }}",
-        fun_src
+        csample_src, fun_src
     )
+}
+
+
+static CSAMPLE_CLAMP_SRC: &'static str = r#"
+i = ivec2(clamp(i.x, 0, int(uWidth)-1), clamp(i.y, 0, int(uHeight)-1));
+return imageLoad(uTexture, i);
+"#;
+static CSAMPLE_WRAP_SRC: &'static str = r#"
+i = ivec2(mod(i.x, int(uWidth)), mod(i.y, int(uHeight)));
+return imageLoad(uTexture, i);
+"#;
+fn csample_val_src(val: f32) -> String {
+    format!("ivec2 im = ivec2(clamp(i.x, 0, int(uWidth)-1), clamp(i.y, 0, int(uHeight)-1));
+    if (i != im) {{
+        return vec4({}, 0., 0., 1.);
+    }}
+    return imageLoad(uTexture, i);", val)
 }

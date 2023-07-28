@@ -8,3 +8,7 @@ pub trait Program {
     fn step(&self, board: &mut Texture2d);
     fn get_dimensions(&self) -> (u32, u32);
 }
+
+pub enum EdgeSolution {
+    Clamp, Wrap, Value
+}

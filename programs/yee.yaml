@@ -1,0 +1,11 @@
+# screen: [3840, 2160]
+screen: [600, 400]
+
+type: val
+edge: clamp
+kernel:
+ - [0.,  1., 0.]
+ - [0., 0., 0.]
+ - [0.,  -1., .0]
+fun: >
+  return clamp(x, 0., 1.);

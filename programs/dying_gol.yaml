@@ -1,7 +1,8 @@
-screen: [3840, 2160]
+screen: [1920, 1080]
 # screen: [600, 400]
 
 type: val
+edge: clamp
 kernel:
  - [1.,  1., 1.]
  - [1., -9., 1.]
