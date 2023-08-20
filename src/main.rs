@@ -9,7 +9,7 @@ use glium::{
 };
 use yaml_rust::YamlLoader;
 
-use crate::{board::{random_board_binary, empty_board, random_board}, program::{val_program::ValProgram, Program}};
+use crate::{board::{random_board_binary, empty_board, random_board}, program::{val_program::ValProgram, Program, rgb_program::RgbProgram}};
 
 mod board;
 mod program;
@@ -41,7 +41,7 @@ fn main() {
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
-    let program = ValProgram::from_yaml(&doc, &display);
+    let program = RgbProgram::from_yaml(&doc, &display);
 
     
 
@@ -54,6 +54,7 @@ fn main() {
     .unwrap();
 
     let mut mouse_pressed = (false, false);
+    let mut active_color = ActiveColor::Red;
 
     let mut last_frame_instant = time::Instant::now();
     let mut last_frame_time = time::Duration::ZERO;
@@ -112,7 +113,12 @@ fn main() {
                 
                 // let mut map_write = buffer.map_write();
                 for (x, y) in &draw_queue {
-                    buffer[*y as usize][*x as usize] = (255, 0, 0, 255);
+                    buffer[*y as usize][*x as usize] = match active_color {
+                        ActiveColor::Red => (255, 0, 0, 255),
+                        ActiveColor::Green => (0, 255, 0, 255),
+                        ActiveColor::Blue => (0, 0, 255, 255),
+                        ActiveColor::White => (255, 255, 255, 255),
+                    }
                 }
                 board = glium::texture::Texture2d::with_format(
                     &display,
@@ -193,6 +199,15 @@ fn main() {
                                 )
                                 .unwrap();
                             }
+                            19 | 34 | 48 | 2 => {
+                                // r, g, b, w
+                                match input.scancode {
+                                    34 => active_color = ActiveColor::Green,
+                                    48 => active_color = ActiveColor::Blue,
+                                    2 => active_color = ActiveColor::White,
+                                    _ => active_color = ActiveColor::Red
+                                }
+                            }
                             33 => {
                                 // f
                                 println!("frametime: {}ms", last_frame_time.as_millis());
@@ -228,5 +243,6 @@ fn main() {
     });
 }
 
-
-
+enum ActiveColor {
+    Red, Green, Blue, White
+}

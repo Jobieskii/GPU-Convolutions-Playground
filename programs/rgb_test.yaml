@@ -1,0 +1,11 @@
+# screen: [3840, 2160]
+screen: [1920, 1080]
+
+type: rgb
+edge: clamp
+kernel:
+ - [1., 1., 1.]
+ - [1., 1., 1.]
+ - [1., 1., 1.]
+fun: >
+  return vec3(v.r/9.);

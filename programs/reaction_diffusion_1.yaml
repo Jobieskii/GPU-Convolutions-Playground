@@ -1,0 +1,22 @@
+# screen: [3840, 2160]
+screen: [1920, 1080]
+
+
+# based on http://www.karlsims.com/rd.html
+
+type: rgb
+edge: [0., 1., 0.]
+kernel:
+ - [.05, .2, .05]
+ - [.2, -1., .2]
+ - [.05, .2, .05]
+fun: >
+  float D_a = 1.0;
+  float D_b = .5;
+  float f = .055;
+  float k = .062;
+  float A = prev.r;
+  float B = prev.g;
+  v.r = A + (D_a * v.r - A * B*B + f * (1. - A));
+  v.g = B + (D_b * v.g + A * B*B -(k+f) * B);
+  return v;
