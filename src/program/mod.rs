@@ -4,10 +4,23 @@ pub mod rgb_program;
 use glium::{Texture2d, Display};
 use yaml_rust::Yaml;
 
+use self::{val_program::ValProgram, rgb_program::RgbProgram};
+
 pub trait Program {
-    fn from_yaml(doc: &Yaml, display: &Display) -> Self;
+    fn from_yaml(doc: &Yaml, display: &Display) -> Self where Self: Sized;
     fn step(&self, board: &mut Texture2d);
     fn get_dimensions(&self) -> (u32, u32);
+}
+
+pub fn program_from_yaml(doc: &Yaml, display: &Display) -> Box<dyn Program> {
+    let typ = doc["type"].as_str().unwrap();
+    match typ {
+        "val" => Box::new(ValProgram::from_yaml(doc, display)),
+        "rgb" => Box::new(RgbProgram::from_yaml(doc, display)),
+        _ => {
+            panic!("Invalid program type!")
+        }
+    }
 }
 
 pub enum EdgeSolution<T> {

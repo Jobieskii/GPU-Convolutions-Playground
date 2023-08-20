@@ -9,7 +9,7 @@ use glium::{
 };
 use yaml_rust::YamlLoader;
 
-use crate::{board::{random_board_binary, empty_board, random_board}, program::{val_program::ValProgram, Program, rgb_program::RgbProgram}};
+use crate::{board::{random_board_binary, empty_board, random_board}, program::program_from_yaml};
 
 mod board;
 mod program;
@@ -41,7 +41,7 @@ fn main() {
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
-    let program = RgbProgram::from_yaml(&doc, &display);
+    let program = program_from_yaml(&doc, &display);
 
     
 
