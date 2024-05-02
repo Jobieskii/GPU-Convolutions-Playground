@@ -1,5 +1,6 @@
 # screen: [3840, 2160]
-screen: [1920, 1080]
+# screen: [1920, 1080]
+screen: [900, 600]
 
 type: val
 edge: 1.

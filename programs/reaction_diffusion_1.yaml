@@ -1,11 +1,11 @@
 # screen: [3840, 2160]
-screen: [1920, 1080]
+screen: [960, 540]
 
 
 # based on http://www.karlsims.com/rd.html
 
 type: rgb
-edge: [0., 1., 0.]
+edge: clamp
 kernel:
  - [.05, .2, .05]
  - [.2, -1., .2]

@@ -1,15 +1,20 @@
-use std::{time, env, fs};
+use std::{env, fs, time};
 
 use glium::{
     glutin::{
         dpi::PhysicalSize,
-        event::{self, ElementState, MouseButton}, window::Fullscreen,
+        event::{self, ElementState, MouseButton},
+        window::Fullscreen,
     },
-    texture::{MipmapsOption, UncompressedFloatFormat}, Surface, BlitTarget,
+    texture::{MipmapsOption, UncompressedFloatFormat},
+    BlitTarget, Surface,
 };
 use yaml_rust::YamlLoader;
 
-use crate::{board::{random_board_binary, empty_board, random_board}, program::program_from_yaml};
+use crate::{
+    board::{empty_board, random_board, random_board_binary},
+    program::program_from_yaml,
+};
 
 mod board;
 mod program;
@@ -17,7 +22,7 @@ fn main() {
     use glium::glutin;
 
     let args: Vec<String> = env::args().collect();
-    
+
     let doc = if let Some(path) = args.get(1) {
         let string = fs::read_to_string(path).unwrap();
         let docs = YamlLoader::load_from_str(&string).unwrap();
@@ -36,14 +41,11 @@ fn main() {
         // .with_fullscreen(Some(glutin::window::Fullscreen::Borderless(None)))
         .with_min_inner_size(PhysicalSize::new(width, height))
         .with_inner_size(PhysicalSize::new(width, height))
-        
-        ;
+        .with_decorations(true);
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
     let program = program_from_yaml(&doc, &display);
-
-    
 
     let mut board = glium::texture::Texture2d::with_format(
         &display,
@@ -61,7 +63,7 @@ fn main() {
 
     let mut speed = 32;
     let mut step_counter = 0;
-    
+
     let mut draw_queue = Vec::<(u32, u32)>::new();
 
     event_loop.run(move |ev, _, control_flow| {
@@ -70,7 +72,7 @@ fn main() {
 
             if speed < 32 {
                 step_counter += 1;
-                if step_counter % (32 / speed) == 0 {
+                if speed > 0 && step_counter % (32 / speed) == 0 {
                     program.step(&mut board);
                 }
             } else {
@@ -93,31 +95,29 @@ fn main() {
                     let w = dim.0;
                     ((w as f32 / aspect_ratio) as u32, w)
                 };
-                board
-                .as_surface()
-                .blit_whole_color_to(
-                    &target, 
+                board.as_surface().blit_whole_color_to(
+                    &target,
                     &BlitTarget {
                         left: (dim.0 - width) / 2,
                         bottom: (dim.1 - height) / 2,
                         width: width as i32,
-                        height: height as i32
-                    }, 
-                    glium::uniforms::MagnifySamplerFilter::Nearest);
+                        height: height as i32,
+                    },
+                    glium::uniforms::MagnifySamplerFilter::Nearest,
+                );
             }
             target.finish().unwrap();
 
             if !draw_queue.is_empty() {
-                
-                let mut buffer: Vec<Vec<(u8, u8, u8, u8)>> = board.read();
-                
+                let mut buffer: Vec<Vec<(f32, f32, f32, f32)>> = unsafe { board.unchecked_read() };
+
                 // let mut map_write = buffer.map_write();
                 for (x, y) in &draw_queue {
                     buffer[*y as usize][*x as usize] = match active_color {
-                        ActiveColor::Red => (255, 0, 0, 255),
-                        ActiveColor::Green => (0, 255, 0, 255),
-                        ActiveColor::Blue => (0, 0, 255, 255),
-                        ActiveColor::White => (255, 255, 255, 255),
+                        ActiveColor::Red => (1., 0., 0., 1.),
+                        ActiveColor::Green => (0., 1., 0., 1.),
+                        ActiveColor::Blue => (0., 0., 1., 1.),
+                        ActiveColor::White => (1., 1., 1., 1.),
                     }
                 }
                 board = glium::texture::Texture2d::with_format(
@@ -134,8 +134,6 @@ fn main() {
             if last_frame_time > time::Duration::from_nanos(16_666_667) {
                 // println!("{}ms frame time!", last_frame_time.as_millis())
             }
-
-            
         }
 
         // println!("{} ms/f", next_frame_time.duration_since(last_frame_time).as_millis());
@@ -157,16 +155,12 @@ fn main() {
                         let inner_size = display.gl_window().window().inner_size();
                         let x: u32 = (position.x as u32 * width) / inner_size.width;
                         let t: u32 = (position.y as u32 * height) / inner_size.height;
-                        let y: u32 = height
-                            - t.min(height);
+                        let y: u32 = height - t.min(height);
                         // println!("mp: {} {}, inner_size: {} {}, board_size: {} {}, xy: {} {}", mouse_pos.x, mouse_pos.y, inner_size.width, inner_size.height, width, height, x, y);
                         draw_queue.push((x.min(width - 1), y.min(height - 1)));
                     }
                 }
-                event::WindowEvent::KeyboardInput {
-                    input,
-                    ..
-                } => {
+                event::WindowEvent::KeyboardInput { input, .. } => {
                     if input.state == ElementState::Pressed {
                         match input.scancode {
                             57 => {
@@ -199,13 +193,13 @@ fn main() {
                                 )
                                 .unwrap();
                             }
-                            19 | 34 | 48 | 2 => {
+                            19 | 34 | 48 | 17 => {
                                 // r, g, b, w
                                 match input.scancode {
                                     34 => active_color = ActiveColor::Green,
                                     48 => active_color = ActiveColor::Blue,
-                                    2 => active_color = ActiveColor::White,
-                                    _ => active_color = ActiveColor::Red
+                                    17 => active_color = ActiveColor::White,
+                                    _ => active_color = ActiveColor::Red,
                                 }
                             }
                             33 => {
@@ -225,13 +219,13 @@ fn main() {
                                 } else {
                                     window.set_fullscreen(None);
                                 }
-                                
                             }
-                            x if x >= 2 && x <= 11 => { 
-                                // 1..0
+                            x if x >= 2 && x <= 12 => {
+                                // 1..9..-
                                 let mode = x - 2;
                                 speed = 1 << mode;
                             }
+                            13 => speed = 0, // =
                             x => println!("{}", x),
                         }
                     }
@@ -244,5 +238,8 @@ fn main() {
 }
 
 enum ActiveColor {
-    Red, Green, Blue, White
+    Red,
+    Green,
+    Blue,
+    White,
 }

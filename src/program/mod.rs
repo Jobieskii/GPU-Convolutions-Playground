@@ -1,10 +1,11 @@
 pub mod val_program;
 pub mod rgb_program;
+pub mod symmetric_rgb_program;
 
 use glium::{Texture2d, Display};
 use yaml_rust::Yaml;
 
-use self::{val_program::ValProgram, rgb_program::RgbProgram};
+use self::{rgb_program::RgbProgram, symmetric_rgb_program::SymmetricRgbProgram, val_program::ValProgram};
 
 pub trait Program {
     fn from_yaml(doc: &Yaml, display: &Display) -> Self where Self: Sized;
@@ -17,6 +18,7 @@ pub fn program_from_yaml(doc: &Yaml, display: &Display) -> Box<dyn Program> {
     match typ {
         "val" => Box::new(ValProgram::from_yaml(doc, display)),
         "rgb" => Box::new(RgbProgram::from_yaml(doc, display)),
+        "sym" => Box::new(SymmetricRgbProgram::from_yaml(doc, display)),
         _ => {
             panic!("Invalid program type!")
         }

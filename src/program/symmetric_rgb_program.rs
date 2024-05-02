@@ -5,34 +5,36 @@ use yaml_rust::Yaml;
 
 use super::{Program, EdgeSolution};
 const WORK_GROUP_SIZE: (u32, u32) = (32, 32);
-pub struct RgbProgram {
+pub struct SymmetricRgbProgram {
     width: u32,
     height: u32,
     convolution_shader: ComputeShader,
-    kernel_buf: UniformBuffer<[f32]>,
+    kernel_buf_hor: UniformBuffer<[f32]>,
+    kernel_buf_ver: UniformBuffer<[f32]>,
     kernel_size: usize,
     buffer_texture: Texture2d
 }
 
-impl RgbProgram {
+impl SymmetricRgbProgram {
     pub fn new(
         width: u32,
         height: u32,
         fun: &str,
-        kernel: Vec<Vec<f32>>,
+        kernel_hor: Vec<f32>,
+        kernel_ver: Vec<f32>,
         display: &Display,
         edge_solution: EdgeSolution<(f32, f32, f32)>
     ) -> Self {
         let clamp_src = edge_solution.csample_src();
-        let kernel_size = kernel.len();
-        let flat_kernel: Vec<f32> = kernel.iter()
-            .flatten()
-            .copied()
-            .collect();
 
-        
-        let kernel_buf: UniformBuffer<[f32]> = UniformBuffer::empty_unsized_immutable(display, kernel_size*kernel_size*size_of::<f32>()).unwrap();
-        kernel_buf.write(&flat_kernel);
+        assert!(kernel_hor.len() == kernel_ver.len());
+        let kernel_size = kernel_hor.len();
+
+        let kernel_buf_hor: UniformBuffer<[f32]> = UniformBuffer::empty_unsized_immutable(display, kernel_size*size_of::<f32>()).unwrap();
+        kernel_buf_hor.write(&kernel_hor);
+
+        let kernel_buf_ver: UniformBuffer<[f32]> = UniformBuffer::empty_unsized_immutable(display, kernel_size*size_of::<f32>()).unwrap();
+        kernel_buf_ver.write(&kernel_ver);
 
         let buffer_texture = glium::texture::Texture2d::with_format(
             display,
@@ -47,17 +49,18 @@ impl RgbProgram {
             height,
             convolution_shader: glium::program::ComputeShader::from_source(
                 display,
-                &convolution_shader_src(fun, &clamp_src, kernel_size * kernel_size)
+                &convolution_shader_src(fun, &clamp_src, kernel_size)
             )
             .unwrap(),
-            kernel_buf,
+            kernel_buf_hor,
+            kernel_buf_ver,
             kernel_size,
             buffer_texture
         }
     }
 }
 
-impl Program for RgbProgram {
+impl Program for SymmetricRgbProgram {
     fn step(&self, board: &mut Texture2d) {
         
         board.as_surface().fill(&self.buffer_texture.as_surface(), glium::uniforms::MagnifySamplerFilter::Nearest);
@@ -76,7 +79,34 @@ impl Program for RgbProgram {
                 uWidth: self.width, 
                 uHeight: self.height, 
                 uKernelSize: self.kernel_size as i32, 
-                uKernel: &self.kernel_buf, 
+                uKernel: &self.kernel_buf_hor,
+                uKernelDir: 0,
+                uTextureWrite: image_unit,
+                uTexture: image_buffer
+            }, 
+            self.width/WORK_GROUP_SIZE.0 + if self.width % WORK_GROUP_SIZE.0 > 0 {1} else {0}, 
+            self.height/WORK_GROUP_SIZE.1 + if self.height % WORK_GROUP_SIZE.1 > 0 {1} else {0}, 
+            1
+        );
+
+        board.as_surface().fill(&self.buffer_texture.as_surface(), glium::uniforms::MagnifySamplerFilter::Nearest);
+
+        let image_unit = board
+            .image_unit(ImageUnitFormat::RGBA32F)
+            .unwrap()
+            .set_access(ImageUnitAccess::Write);
+        let image_buffer = self.buffer_texture
+            .image_unit(ImageUnitFormat::RGBA32F)
+            .unwrap()
+            .set_access(ImageUnitAccess::Read);
+        
+        self.convolution_shader.execute(
+            uniform! { 
+                uWidth: self.width, 
+                uHeight: self.height, 
+                uKernelSize: self.kernel_size as i32, 
+                uKernel: &self.kernel_buf_ver,
+                uKernelDir: 1,
                 uTextureWrite: image_unit,
                 uTexture: image_buffer
             }, 
@@ -118,33 +148,33 @@ impl Program for RgbProgram {
             doc["screen"][0].as_i64().unwrap().try_into().unwrap(),
             doc["screen"][1].as_i64().unwrap().try_into().unwrap(),
             doc["fun"].as_str().unwrap(),
-            doc["kernel"]
+            doc["kernelHor"]
                 .as_vec()
                 .unwrap()
                 .into_iter()
-                .map(|s| {
-                    s.as_vec()
-                        .expect(&format!(
-                            "Error reading program file: Kernel not an array {:?}",
-                            s
-                        ))
-                        .into_iter()
-                        .map(|yaml| {
-                            yaml.as_f64().expect(&format!(
-                                "Error reading program file: Kernel not a float ({:?})",
-                                s
-                            )) as f32
-                        })
-                        .collect::<Vec<f32>>()
-                })
-                .collect::<Vec<Vec<f32>>>(),
+                .map(|yaml| {
+                    yaml.as_f64().expect(&format!(
+                        "Error reading program file: Kernel not a float ({:?})",
+                        doc["kernelHor"]
+                    )) as f32
+                }).collect(),
+                doc["kernelVer"]
+                .as_vec()
+                .unwrap()
+                .into_iter()
+                .map(|yaml| {
+                    yaml.as_f64().expect(&format!(
+                        "Error reading program file: Kernel not a float ({:?})",
+                        doc["kernelVer"]
+                    )) as f32
+                }).collect(),
             display,
             edge
         )
     }
 }
 
-fn convolution_shader_src(fun_src: &str, csample_src: &str, kernel_size_sq: usize) -> String {
+fn convolution_shader_src(fun_src: &str, csample_src: &str, kernel_size: usize) -> String {
     format!(
         "#version 430
 
@@ -154,8 +184,9 @@ fn convolution_shader_src(fun_src: &str, csample_src: &str, kernel_size_sq: usiz
     uniform uint uHeight;
     uniform int uKernelSize;
     uniform uKernel{{
-        float kernel[{kernel_size_sq}];
+        float kernel[{kernel_size}];
     }};
+    uniform int uKernelDir;
     uniform layout(binding=3, rgba32f) image2D uTextureWrite;
     uniform layout(binding=3, rgba32f) image2D uTexture;
 
@@ -171,10 +202,18 @@ fn convolution_shader_src(fun_src: &str, csample_src: &str, kernel_size_sq: usiz
         if (i.x >= int(uWidth) || i.y >= int(uHeight))
             return;
 
-        vec3 sum = vec3(0.);
+        vec3 sum = vec3(0);
+
         int offset = uKernelSize / 2;
-        for (int k = 0; k < uKernelSize*uKernelSize; ++k)
-            sum += csample(i + ivec2(mod(k, uKernelSize) - offset, k / uKernelSize - offset)).rgb * vec3(kernel[k]);
+        ivec2 p = ivec2(0);
+        if (uKernelDir == 0 ) {{
+            p.x = 1;
+        }} else {{
+            p.y = 1;
+        }}
+        for (int k = 0; k < uKernelSize; ++k)
+            sum += csample(i + (k - offset)*p).rgb * vec3(kernel[k]);
+        
 
         vec4 pixel_sample = imageLoad(uTexture, i);
         imageStore(uTextureWrite, i, vec4(fun(sum, pixel_sample.rgb), pixel_sample.a) );
